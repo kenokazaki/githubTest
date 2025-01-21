@@ -1,0 +1,48 @@
+--new spend query (11.04.24)
+SELECT 
+co.scenario
+,co.version
+,co.years
+,case when co.period = 'JAN' then '1'
+    when co.period = 'FEB' then '2'
+    when co.period = 'MAR' then '3'
+    when co.period = 'APR' then '4'
+    when co.period = 'MAY' then '5'
+    when co.period = 'JUN' then '6'
+    when co.period = 'JUL' then '7'
+    when co.period = 'AUG' then '8'
+    when co.period = 'SEP' then '9'
+    when co.period = 'OCT' then '10'
+    when co.period = 'NOV' then '11'
+    when co.period = 'DEC' then '12'
+else 'Other' end as Month
+,CASE when co.entity IN ('312-Squareup International Limited') THEN rgn.country else geo.country end as Country
+,glm.cost_type_v_3
+,dept.new_team --need to change to new team
+,dept.program_spend_type
+,CASE 
+     when dept.new_team='PMM(ProductIntl)'  then sum(co.usd) * 0.25 --% applied to 10529-Square-Product-Intl
+     when dept.new_team='Non-Channel Specific' and glm.cost_type_v_3='Free Processing' then sum(co.usd) * -0.33  --33% assumption applied for level of free processing
+else sum(co.usd) end as Month_Amt
+
+FROM FANDS_ANALYTICS.PBCS.FINSTMT_DATA_PIVOT_V co
+left join fivetran.app_fdp.gtm_gl_mapping_v_3 glm on co.account = glm.GLS		
+left join fivetran.app_fdp.gtm_dept_mapping_v_3 dept on co.department = dept.cost_center
+left join fivetran.app_fdp.gtm_entity_mapping geo on co.entity=geo.entity
+left join fivetran.app_fdp.gtm_region_mapping rgn on co.region=rgn.region
+ 
+WHERE 
+co.SCENARIO IN ('Actual','Current Outlook')
+AND co.version IN ('Final','Working1')
+AND geo.country IN ('US','CA','AU','JP','UK','UK Regions','IE','FR','ES')
+AND dept.bu IN ('Square')	 
+AND glm.cost_type_v_3 != 'No'
+AND co.years IN ('FY22','FY23','FY24')
+AND (co.account like '6%'
+    OR (co.account = '4500020-Processing Adjustments' AND co.PRODUCT = '1010-Processing'))
+
+group by all
+ORDER BY YEARS, MONTH
+
+
+
