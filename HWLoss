@@ -1,0 +1,48 @@
+--Ken's version - Query for ToF HWL365 by Purchase Date (valid through yesterday). Cohorted on purchase date / loss date:
+SELECT
+  LAST_DAY(ss.best_available_purchase_date) AS purchase_month
+, merchant_receipt_country_code AS country_code
+//, onboarding_channel_bof AS onboarding_channel_bof
+, SUM
+  (
+    CASE
+      WHEN ss.paid_r4x_count > 1 THEN 0 --this is a patch for bad values
+      WHEN ss.paid_r4x_count = 0 AND ss.reader_type ILIKE 'R4%' THEN -1 * ll.unit_cost --If R4 is free, use the unit cost
+      WHEN ss.discounted_price IS NOT NULL THEN (ss.discounted_price * xx.exchange_rate_period_average - ll.unit_cost) --If Ecomm (discounted price is filled), then use the discounted price with USD exchange rate column
+      ELSE ll.loss_per_unit_usd --If not Ecomm, use the calculated loss per unit USD column
+    END
+  ) AS acq_hwl_365d_usd
+
+FROM app_hardware.adhoc.hardware_sales_for_marketing_rois ss
+JOIN growth_mktg.public.vconversion_events_sq_tof mm
+  ON ss.merchant_token = mm.merchant_token
+
+LEFT JOIN app_marketing.etl.country_currency_mapping_temp mcm
+  ON mcm.country_code = ss.country
+
+LEFT JOIN app_marketing.import.hardware_loss_by_product ll
+  ON ss.channel ILIKE ll.channel
+  AND YEAR(ss.best_available_purchase_date) = ll.year
+  AND QUARTER(ss.best_available_purchase_date) = ll.quarter
+  AND ss.reader_type = ll.product
+  AND ss.country = ll.country_code
+LEFT JOIN app_bi.hexagon.vdim_exchange_rate xx
+  ON mcm.local_currency_code = xx.from_currency_code
+  AND xx.to_currency_code = 'USD'
+  AND ss.best_available_purchase_date = xx.exchange_rate_date
+JOIN app_bi.square_fns.vdim_merchant dd
+  ON ss.merchant_token = dd.merchant_token
+
+WHERE 1=1
+  AND YEAR(ss.best_available_purchase_date) >= 2019
+  AND ss.merchant_token IS NOT NULL
+  AND ss.reader_type IN ('T2', 'X2', 'S1', 'R12', 'R4', 'R41', 'R6', 'S3','R42','T3')
+  AND DATEDIFF('day', sq_bof_date, ss.best_available_purchase_date) between -365 and 365
+  //AND ss.merchant_token = 'MLK4Y8VJD7J6Y'
+  //AND ss.merchant_token = 'ML1Q43G72TC92'
+  //AND ss.merchant_token = 'ML0HXD6Q6ZEM1' 
+  //AND ss.merchant_token = 'YSFHSRCKB18G3' 
+
+GROUP BY 1,2,3
+ORDER BY 1,2,3
+
