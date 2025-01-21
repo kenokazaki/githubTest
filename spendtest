@@ -42,7 +42,6 @@ AND (co.account like '6%'
     OR (co.account = '4500020-Processing Adjustments' AND co.PRODUCT = '1010-Processing'))
 
 group by all
-ORDER BY YEARS
 
 
 
